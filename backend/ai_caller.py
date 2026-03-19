@@ -1,179 +1,247 @@
 """
-6-layer AI caller with automatic fallback.
+ai_caller.py — Centralized AI gateway for VerifyFlow.
 
-Layer 1-3 : Gemini key rotation  (google-generativeai, gemini-2.5-pro-latest)
-Layer 4   : Groq                  (langchain-groq, llama-3.3-70b-versatile)
-Layer 5   : OpenRouter            (openai client → openai/gpt-4o-mini)
-Layer 6   : Safe default          (static JSON response)
+All agents call `call_ai()` — never call Gemini/Groq directly.
+
+Fallback chain:
+  1. Gemini 2.5 Flash-Lite  (speed="fast",   1000 req/day free per key)
+  2. Gemini 2.5 Flash       (speed="normal",   250 req/day free per key)
+  3. Gemini 2.5 Pro         (speed="smart",    100 req/day free per key)
+     Rotates through GEMINI_KEY_1…3 before giving up on Gemini.
+  4. Groq  llama-3.3-70b    (free, no card)
+  5. OpenRouter mistral-7b  (free tier)
+  6. Safe default JSON       (demo never crashes)
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
-from typing import Any, Dict
+import re
+import time
+from typing import Optional
 
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-_GEMINI_KEYS = [
-    os.getenv("GEMINI_API_KEY_1", ""),
-    os.getenv("GEMINI_API_KEY_2", ""),
-    os.getenv("GEMINI_API_KEY_3", ""),
+# ── API Keys ────────────────────────────────────────────────────────────────
+_GEMINI_KEYS: list[str] = [
+    k for k in [
+        os.getenv("GEMINI_API_KEY_1"),
+        os.getenv("GEMINI_API_KEY_2"),
+        os.getenv("GEMINI_API_KEY_3"),
+        os.getenv("GEMINI_API_KEY_4"),
+        os.getenv("GEMINI_API_KEY"),      # fallback single-key setups
+    ]
+    if k
 ]
-_GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-_OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+
+GROQ_API_KEY       = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+
+# ── In-memory result cache (avoid repeated API calls for same doc) ───────────
+_cache: dict[str, str] = {}
+
+# ── Key rotation counter ─────────────────────────────────────────────────────
+_key_index = 0
 
 
-_SAFE_DEFAULT: Dict[str, Any] = {
-    "analysis": "Unable to perform AI analysis at this time.",
-    "visual_score": 50,
-    "visual_flags": ["AI analysis unavailable – manual review required"],
-    "gemini_analysis": "All AI providers unavailable. Please retry later.",
-    "trust_score": 50,
-    "verdict": "SUSPICIOUS",
-    "summary": "Automated AI analysis could not be completed. Manual review recommended.",
-    "red_flags": [],
-    "error": "all_providers_unavailable",
+def _next_gemini_key() -> Optional[str]:
+    """Return the next Gemini key in round-robin order."""
+    global _key_index
+    if not _GEMINI_KEYS:
+        return None
+    key = _GEMINI_KEYS[_key_index % len(_GEMINI_KEYS)]
+    _key_index += 1
+    return key
+
+
+# ── Model selection by speed ─────────────────────────────────────────────────
+_MODEL_MAP = {
+    "fast":   "gemini-2.5-flash-lite-preview-06-17",   # 1000 RPD free
+    "normal": "gemini-2.5-flash",                       # 250  RPD free
+    "smart":  "gemini-2.5-pro",                         # 100  RPD free
 }
 
 
-def _clean_json_response(text: str) -> str:
-    """Strip markdown fences that models sometimes wrap around JSON."""
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        # drop first and last fence lines
-        inner = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
-        text = "\n".join(inner).strip()
-    return text
+def _clean_json(raw: str) -> str:
+    """Strip markdown code fences so JSON.loads works cleanly."""
+    raw = raw.strip()
+    raw = re.sub(r"^```(?:json)?", "", raw)
+    raw = re.sub(r"```$", "", raw)
+    return raw.strip()
 
 
-async def _call_gemini(api_key: str, prompt: str, system_prompt: str, json_mode: bool) -> Dict[str, Any]:
-    import google.generativeai as genai
+# ── Provider: Gemini ─────────────────────────────────────────────────────────
+def _call_gemini(prompt: str, speed: str = "normal") -> Optional[str]:
+    """Try all available Gemini keys before giving up."""
+    model_name = _MODEL_MAP.get(speed, _MODEL_MAP["normal"])
+    attempts = max(len(_GEMINI_KEYS), 1)
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-pro-latest",
-        system_instruction=system_prompt if system_prompt else None,
-    )
-
-    full_prompt = prompt
-    if json_mode:
-        full_prompt = prompt + "\n\nRespond ONLY with valid JSON, no markdown fences."
-
-    loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(
-        None,
-        lambda: model.generate_content(full_prompt),
-    )
-    raw = response.text
-    if json_mode:
-        raw = _clean_json_response(raw)
-        return json.loads(raw)
-    return {"text": raw}
-
-
-async def _call_groq(prompt: str, system_prompt: str, json_mode: bool) -> Dict[str, Any]:
-    from langchain_groq import ChatGroq
-    from langchain_core.messages import HumanMessage, SystemMessage
-
-    messages = []
-    if system_prompt:
-        messages.append(SystemMessage(content=system_prompt))
-    messages.append(HumanMessage(content=prompt))
-
-    kwargs: Dict[str, Any] = {}
-    if json_mode:
-        kwargs["model_kwargs"] = {"response_format": {"type": "json_object"}}
-
-    llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        api_key=_GROQ_API_KEY,
-        **kwargs,
-    )
-
-    loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(None, lambda: llm.invoke(messages))
-    raw = response.content
-    if json_mode:
-        raw = _clean_json_response(raw)
-        return json.loads(raw)
-    return {"text": raw}
-
-
-async def _call_openrouter(prompt: str, system_prompt: str, json_mode: bool) -> Dict[str, Any]:
-    from openai import AsyncOpenAI
-
-    client = AsyncOpenAI(
-        api_key=_OPENROUTER_API_KEY,
-        base_url="https://openrouter.ai/api/v1",
-    )
-
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
-
-    kwargs: Dict[str, Any] = {}
-    if json_mode:
-        kwargs["response_format"] = {"type": "json_object"}
-
-    completion = await client.chat.completions.create(
-        model="openai/gpt-4o-mini",
-        messages=messages,
-        **kwargs,
-    )
-    raw = completion.choices[0].message.content or "{}"
-    if json_mode:
-        raw = _clean_json_response(raw)
-        return json.loads(raw)
-    return {"text": raw}
-
-
-async def call_ai(
-    prompt: str,
-    system_prompt: str = "",
-    json_mode: bool = True,
-) -> Dict[str, Any]:
-    """
-    Attempt each layer in sequence, returning on first success.
-    Layer 6 always succeeds (returns _SAFE_DEFAULT).
-    """
-    # Layers 1-3: Gemini key rotation
-    for idx, key in enumerate(_GEMINI_KEYS, start=1):
+    for attempt in range(attempts):
+        key = _next_gemini_key()
         if not key:
-            continue
+            break
         try:
-            result = await _call_gemini(key, prompt, system_prompt, json_mode)
-            logger.info("AI call succeeded via Gemini layer %d", idx)
+            genai.configure(api_key=key)
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.1,
+                    max_output_tokens=2048,
+                ),
+            )
+            response = model.generate_content(prompt)
+            result = response.text
+            logger.info("Gemini [%s] OK (attempt %d)", model_name, attempt + 1)
             return result
         except Exception as exc:
-            logger.warning("Gemini layer %d failed: %s", idx, exc)
+            err = str(exc)
+            if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                wait = (2 ** attempt) * 3
+                logger.warning("Gemini 429 on key %d — waiting %ss", attempt + 1, wait)
+                time.sleep(wait)
+            else:
+                logger.warning("Gemini error: %s", err)
+                break  # non-rate-limit error; skip to next provider
 
-    # Layer 4: Groq
-    if _GROQ_API_KEY:
-        try:
-            result = await _call_groq(prompt, system_prompt, json_mode)
-            logger.info("AI call succeeded via Groq (layer 4)")
-            return result
-        except Exception as exc:
-            logger.warning("Groq layer 4 failed: %s", exc)
+    return None
 
-    # Layer 5: OpenRouter
-    if _OPENROUTER_API_KEY:
-        try:
-            result = await _call_openrouter(prompt, system_prompt, json_mode)
-            logger.info("AI call succeeded via OpenRouter (layer 5)")
-            return result
-        except Exception as exc:
-            logger.warning("OpenRouter layer 5 failed: %s", exc)
 
-    # Layer 6: Safe default
-    logger.error("All AI providers failed – returning safe default (layer 6)")
-    return dict(_SAFE_DEFAULT)
+# ── Provider: Groq ───────────────────────────────────────────────────────────
+def _call_groq(prompt: str) -> Optional[str]:
+    if not GROQ_API_KEY:
+        return None
+    try:
+        from groq import Groq  # type: ignore
+        client = Groq(api_key=GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=1500,
+        )
+        result = response.choices[0].message.content
+        logger.info("Groq OK — used as fallback")
+        return result
+    except Exception as exc:
+        logger.warning("Groq error: %s", exc)
+        return None
+
+
+# ── Provider: OpenRouter ─────────────────────────────────────────────────────
+def _call_openrouter(prompt: str) -> Optional[str]:
+    if not OPENROUTER_API_KEY:
+        return None
+    try:
+        import openai as _openai  # type: ignore
+        client = _openai.OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=OPENROUTER_API_KEY,
+        )
+        response = client.chat.completions.create(
+            model="mistralai/mistral-7b-instruct:free",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1500,
+        )
+        result = response.choices[0].message.content
+        logger.info("OpenRouter OK — used as final fallback")
+        return result
+    except Exception as exc:
+        logger.warning("OpenRouter error: %s", exc)
+        return None
+
+
+# ── Public API ───────────────────────────────────────────────────────────────
+def call_ai(
+    prompt: str,
+    speed: str = "normal",
+    cache_key: Optional[str] = None,
+) -> str:
+    """
+    Call an AI provider with automatic fallback.
+
+    Args:
+        prompt:    The full prompt string to send.
+        speed:     "fast" | "normal" | "smart"
+        cache_key: If provided, cache and reuse response for same doc.
+
+    Returns:
+        Raw text response string (may be JSON or natural language).
+        Never raises — always returns a string.
+    """
+    # Cache hit
+    if cache_key and cache_key in _cache:
+        logger.debug("Cache hit: %s", cache_key)
+        return _cache[cache_key]
+
+    result: Optional[str] = None
+
+    # 1. Gemini (with key rotation)
+    result = _call_gemini(prompt, speed=speed)
+
+    # 2. Groq fallback
+    if not result:
+        result = _call_groq(prompt)
+
+    # 3. OpenRouter fallback
+    if not result:
+        result = _call_openrouter(prompt)
+
+    # 4. Safe default so demo never crashes
+    if not result:
+        logger.error("All AI providers exhausted — returning safe default")
+        result = json.dumps({
+            "penalty": 0,
+            "flags": [],
+            "summary": "AI analysis temporarily unavailable. Manual review recommended.",
+        })
+
+    # Store in cache
+    if cache_key:
+        _cache[cache_key] = result
+
+    return result
+
+
+def call_ai_json(
+    prompt: str,
+    speed: str = "normal",
+    cache_key: Optional[str] = None,
+    fallback: Optional[dict] = None,
+) -> dict:
+    """
+    Convenience wrapper — calls call_ai() and parses the result as JSON.
+
+    Returns the parsed dict, or `fallback` (default {}) on parse failure.
+    """
+    raw = call_ai(prompt, speed=speed, cache_key=cache_key)
+    try:
+        return json.loads(_clean_json(raw))
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("JSON parse failed for cache_key=%s", cache_key)
+        return fallback if fallback is not None else {}
+
+
+# ── Quick self-test ──────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    print("Testing ai_caller.py …\n")
+
+    test_prompt = (
+        'Respond ONLY with valid JSON, no markdown:\n'
+        '{"status": "ok", "message": "ai_caller working"}'
+    )
+    result = call_ai(test_prompt, speed="fast", cache_key="self_test")
+    print("Result:", result)
+
+    # Second call — should hit cache
+    result2 = call_ai(test_prompt, speed="fast", cache_key="self_test")
+    assert result == result2, "Cache miss!"
+    print("Cache: OK")
+    print("\n✅ ai_caller.py self-test passed")
