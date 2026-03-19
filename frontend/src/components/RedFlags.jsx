@@ -79,20 +79,23 @@ export default function RedFlags({ flags = [] }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: 0.15 }}
-      className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 h-full"
+      className="sentinel-glass rounded-3xl p-8 h-full shadow-[0_0_50px_rgba(0,0,0,0.3)]"
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-          Red Flags
-        </h3>
+      <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-4 bg-violet-400 rounded-full shadow-[0_0_8px_rgba(188,0,255,0.8)]" />
+          <h3 className="text-xs font-black text-white uppercase tracking-[0.3em]">
+            Identified Risks
+          </h3>
+        </div>
         {sorted.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             {SEVERITY_ORDER.map((sev) =>
               countBySeverity[sev] > 0 ? (
                 <span
                   key={sev}
-                  className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${SEVERITY_CONFIG[sev].badge}`}
+                  className={`text-[9px] px-2 py-0.5 rounded-lg border font-black tracking-widest uppercase ${SEVERITY_CONFIG[sev].badge}`}
                 >
                   {countBySeverity[sev]} {SEVERITY_CONFIG[sev].label}
                 </span>
@@ -106,12 +109,12 @@ export default function RedFlags({ flags = [] }) {
       <AnimatePresence>
         {sorted.length === 0 && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
-            className="flex flex-col items-center justify-center py-12 text-center"
+            className="flex flex-col items-center justify-center py-16 text-center bg-emerald-500/[0.02] border border-emerald-500/10 rounded-2xl"
           >
-            <div className="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center mb-4">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 sentinel-border flex items-center justify-center mb-6">
               <svg
                 className="w-8 h-8 text-emerald-400"
                 fill="none"
@@ -126,8 +129,8 @@ export default function RedFlags({ flags = [] }) {
                 />
               </svg>
             </div>
-            <p className="text-emerald-400 font-semibold">No red flags detected</p>
-            <p className="text-sm text-gray-500 mt-1">All checks passed successfully.</p>
+            <p className="text-emerald-400 font-black tracking-widest uppercase text-xs">No threats detected</p>
+            <p className="text-[11px] text-gray-500 mt-2 font-medium">Document satisfies all Sentinel protocol checks.</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -137,7 +140,7 @@ export default function RedFlags({ flags = [] }) {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="space-y-3"
+        className="space-y-4"
       >
         {sorted.map((flag, i) => {
           const sev = normalizeSeverity(flag.severity)
@@ -146,41 +149,25 @@ export default function RedFlags({ flags = [] }) {
             <motion.li
               key={i}
               variants={itemVariants}
-              className={`rounded-xl border p-4 ${cfg.rowBorder} ${cfg.rowBg}`}
+              className={`rounded-2xl border p-5 transition-all duration-300 backdrop-blur-sm ${cfg.rowBorder} ${cfg.rowBg} hover:bg-white/[0.04]`}
             >
-              <div className="flex items-start gap-3">
-                {/* Left bar accent */}
-                <div className={`w-1 self-stretch rounded-full flex-shrink-0 ${cfg.bar}`} />
-
+              <div className="flex items-start gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                  <div className="flex items-center gap-3 flex-wrap mb-3">
                     <span
-                      className={`text-xs px-2 py-0.5 rounded-full border font-bold ${cfg.badge}`}
+                      className={`text-[9px] px-2 py-0.5 rounded-lg border font-black tracking-widest uppercase ${cfg.badge}`}
                     >
                       {cfg.label}
                     </span>
                     {flag.category && (
-                      <span className="text-xs text-gray-500 font-medium bg-gray-800/60 px-2 py-0.5 rounded-full border border-gray-700/60">
+                      <span className="text-[9px] text-white/40 font-black tracking-widest uppercase bg-white/5 px-2 py-0.5 rounded-lg sentinel-border">
                         {flag.category}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-300 leading-relaxed">
+                  <p className="text-sm text-gray-200 leading-relaxed font-medium">
                     {flag.description || flag.message || flag.detail || String(flag)}
                   </p>
-                  {flag.confidence !== undefined && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${cfg.bar}`}
-                          style={{ width: `${Math.round(flag.confidence * 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-[10px] text-gray-500 font-mono">
-                        {Math.round(flag.confidence * 100)}% confidence
-                      </span>
-                    </div>
-                  )}
                 </div>
               </div>
             </motion.li>

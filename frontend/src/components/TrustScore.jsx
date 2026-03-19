@@ -64,33 +64,41 @@ export default function TrustScore({ score = 0, verdict, summary }) {
       initial={{ opacity: 0, scale: 0.92 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
-      className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 flex flex-col items-center text-center h-full"
+      className="sentinel-glass rounded-3xl p-8 flex flex-col items-center text-center h-full shadow-[0_0_50px_rgba(0,0,0,0.4)]"
     >
-      <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-6">
-        Trust Score
-      </h3>
+      <div className="flex items-center gap-2 mb-8 self-start">
+        <div className="w-1.5 h-4 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+        <h3 className="text-xs font-black text-white uppercase tracking-[0.3em]">
+          Audit Verdict
+        </h3>
+      </div>
 
       {/* Circular gauge */}
       <motion.div
         initial={{ scale: 0.6, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.1, type: 'spring', stiffness: 120 }}
-        className={`w-44 h-44 mb-6 drop-shadow-2xl ${cfg.glowColor}`}
+        transition={{ duration: 0.8, delay: 0.1, type: 'spring', damping: 15 }}
+        className={`w-52 h-52 mb-8 relative group`}
       >
+        <div className={`absolute inset-0 rounded-full blur-3xl opacity-20 transition-all duration-700 ${cfg.glowColor}`} />
         <CircularProgressbar
           value={displayScore}
           maxValue={100}
           text={`${displayScore}`}
           styles={buildStyles({
-            rotation: 0.75,
-            strokeLinecap: 'round',
-            textSize: '22px',
-            pathTransitionDuration: 1.2,
+            rotation: 0,
+            strokeLinecap: 'butt',
+            textSize: '24px',
+            pathTransitionDuration: 1.5,
             pathColor: cfg.color,
-            textColor: cfg.color,
-            trailColor: cfg.trailColor,
+            textColor: '#fff',
+            trailColor: 'rgba(255,255,255,0.05)',
           })}
         />
+        <div className="absolute inset-0 border-[10px] border-white/5 rounded-full pointer-events-none" />
+        <div className="absolute -bottom-2 translate-y-1/2 left-1/2 -translate-x-1/2 px-3 py-1 bg-gray-900 border border-white/10 rounded-lg shadow-2xl">
+          <span className="text-[10px] font-black tracking-widest text-cyan-500/80">SENTINEL-X</span>
+        </div>
       </motion.div>
 
       {/* Verdict badge */}
@@ -98,7 +106,7 @@ export default function TrustScore({ score = 0, verdict, summary }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className={`flex items-center gap-2 px-5 py-2 rounded-full border font-bold text-sm mb-4 ${cfg.badgeBg}`}
+        className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl border-2 font-black text-xs tracking-[0.15em] mb-6 shadow-xl ${cfg.badgeBg}`}
       >
         <span className="text-base">{cfg.icon}</span>
         {verdict || cfg.label}
@@ -109,7 +117,7 @@ export default function TrustScore({ score = 0, verdict, summary }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.55 }}
-        className="text-sm text-gray-400 leading-relaxed"
+        className="text-sm text-gray-400 leading-relaxed font-medium px-4"
       >
         {summary || cfg.desc}
       </motion.p>
@@ -119,17 +127,16 @@ export default function TrustScore({ score = 0, verdict, summary }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.65 }}
-        className="mt-6 w-full"
+        className="mt-auto pt-10 w-full"
       >
-        <div className="flex rounded-full overflow-hidden h-2 mb-2">
-          <div className="flex-1 bg-red-500/60" />
-          <div className="flex-1 bg-amber-500/60" />
-          <div className="flex-1 bg-emerald-500/60" />
+        <div className="flex justify-between text-[9px] text-gray-600 font-black uppercase tracking-widest mb-2 px-1">
+          <span>High Risk</span>
+          <span>Validated</span>
         </div>
-        <div className="flex justify-between text-[10px] text-gray-600 font-medium px-0.5">
-          <span>0 – Fraud</span>
-          <span>40 – Suspicious</span>
-          <span>75 – Authentic</span>
+        <div className="flex rounded-full overflow-hidden h-1 sentinel-border">
+          <div className="flex-1 bg-red-500/40" />
+          <div className="flex-1 bg-amber-500/40" />
+          <div className="flex-1 bg-emerald-500/40" />
         </div>
       </motion.div>
     </motion.div>

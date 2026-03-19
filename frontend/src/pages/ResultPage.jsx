@@ -105,24 +105,41 @@ export default function ResultPage() {
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8 flex items-center justify-between flex-wrap gap-4"
+          className="mb-10 flex items-center justify-between flex-wrap gap-6"
         >
           <div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-              {phase === 'processing' ? 'Analyzing Document…' : phase === 'done' ? 'Analysis Complete' : 'Analysis Failed'}
+            <h2 className="text-3xl font-black text-white tracking-tight">
+              {phase === 'processing' ? (
+                <span className="flex items-center gap-3">
+                  <span className="text-neon-blue">Sentinel</span>
+                  <span>Analysis In Progress</span>
+                </span>
+              ) : phase === 'done' ? (
+                <span className="flex items-center gap-3">
+                  <span className="text-emerald-400">Audit</span>
+                  <span>Finalized</span>
+                </span>
+              ) : (
+                <span className="text-red-400">Analysis Failed</span>
+              )}
             </h2>
-            <p className="text-sm text-gray-500 mt-1 font-mono">Job ID: {jobId}</p>
+            <div className="flex items-center gap-3 mt-2">
+              <span className="text-[10px] text-gray-500 font-mono tracking-widest uppercase bg-gray-900/50 px-2 py-0.5 rounded border border-gray-800">
+                Job ID: {jobId}
+              </span>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+            </div>
           </div>
           <motion.button
-            whileHover={{ scale: 1.03 }}
+            whileHover={{ scale: 1.03, boxShadow: "0 0 20px rgba(6,182,212,0.1)" }}
             whileTap={{ scale: 0.97 }}
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gray-900/80 hover:bg-gray-800/80 border border-white/10 text-gray-300 text-sm font-bold transition-all shadow-xl backdrop-blur-md"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            Analyze Another Document
+            New Audit
           </motion.button>
         </motion.div>
 

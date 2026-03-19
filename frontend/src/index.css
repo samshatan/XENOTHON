@@ -3,12 +3,45 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --sentinel-blue: #00f2ff;
+    --sentinel-violet: #bc00ff;
+    --sentinel-bg: #020617;
+    --sentinel-surface: rgba(15, 23, 42, 0.6);
+    --sentinel-glass: rgba(255, 255, 255, 0.03);
+    --sentinel-border: rgba(255, 255, 255, 0.1);
+  }
+
   body {
-    @apply bg-gray-950 text-gray-100 font-sans;
+    @apply bg-gray-950 text-gray-100 font-sans selection:bg-blue-500/30;
+    background-color: var(--sentinel-bg);
+    background-image: 
+      radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+      radial-gradient(at 50% 0%, hsla(225,39%,30%,0.1) 0, transparent 50%),
+      radial-gradient(at 100% 0%, hsla(339,49%,30%,0.05) 0, transparent 50%);
   }
 }
 
 @layer utilities {
+  .sentinel-glass {
+    @apply backdrop-blur-xl border border-white/10 shadow-2xl;
+    background: var(--sentinel-glass);
+  }
+  
+  .sentinel-border {
+    border: 1px solid var(--sentinel-border);
+  }
+
+  .text-neon-blue {
+    color: var(--sentinel-blue);
+    text-shadow: 0 0 10px rgba(0, 242, 255, 0.4);
+  }
+
+  .text-neon-violet {
+    color: var(--sentinel-violet);
+    text-shadow: 0 0 10px rgba(188, 0, 255, 0.4);
+  }
+
   .animate-spin-slow {
     animation: spin 3s linear infinite;
   }

@@ -123,23 +123,20 @@ export default function UploadPage() {
           transition={{ duration: 0.6 }}
           className="text-center mb-10"
         >
-          <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1.5 mb-5">
-            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-            <span className="text-xs text-blue-300 font-semibold tracking-widest uppercase">
-              AI-Powered Analysis
+          <div className="inline-flex items-center gap-2 bg-blue-500/5 sentinel-border rounded-full px-4 py-1.5 mb-5 shadow-inner">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+            <span className="text-[10px] text-cyan-300 font-bold tracking-[0.2em] uppercase">
+              Sentinel Protocol Active
             </span>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-extrabold mb-3 leading-tight">
-            <span className="bg-gradient-to-r from-white via-blue-100 to-blue-300 bg-clip-text text-transparent">
-              Detect Document
-            </span>
-            <br />
-            <span className="bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-              Fraud Instantly
-            </span>
+          <h1 className="text-4xl sm:text-6xl font-black mb-4 tracking-tight">
+            <span className="text-white">Verify</span>
+            <span className="text-neon-blue">Flow</span>
           </h1>
-          <p className="text-gray-400 text-lg max-w-md mx-auto">
-            Upload any document and our multi-agent AI pipeline will verify its authenticity in seconds.
+          <p className="text-gray-400 text-lg max-w-md mx-auto font-medium">
+            AI-powered document audit & fraud detection.
+            <br />
+            <span className="text-xs text-gray-500 mt-2 block">Powered by Multi-Agent LangGraph Orchestration</span>
           </p>
         </motion.div>
 
@@ -148,11 +145,13 @@ export default function UploadPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="mb-4"
+          className="mb-8"
         >
           <div
             {...getRootProps()}
-            className={`relative rounded-2xl border-2 border-dashed p-10 text-center cursor-pointer transition-all duration-300 ${borderColor}`}
+            className={`relative rounded-3xl sentinel-glass p-12 text-center cursor-pointer transition-all duration-500 group shadow-blue-500/5 ${
+              isDragActive ? 'ring-2 ring-cyan-500 shadow-[0_0_40px_rgba(6,182,212,0.1)]' : ''
+            }`}
           >
             <input {...getInputProps()} />
 
