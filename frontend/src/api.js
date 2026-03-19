@@ -20,7 +20,7 @@ export const getResult = async (jobId) => {
 }
 
 export const createSSEConnection = (jobId, onMessage, onError) => {
-  const url = `${BASE_URL}/stream/${jobId}`
+  const url = `${BASE_URL}/status/${jobId}`
   const eventSource = new EventSource(url)
   eventSource.onmessage = (event) => {
     const data = JSON.parse(event.data)

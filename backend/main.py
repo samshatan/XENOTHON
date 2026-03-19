@@ -240,67 +240,11 @@ async def upload_document(
     logger.info("Job %s created for file '%s'", job_id, file.filename)
     return JSONResponse(
         status_code=202,
-        content={
-            "job_id": job_id,
-            "status": job.status.value,
-            "filename": job.filename,
-            "message": "Document received. Analysis started.",
-        },
+        content={"job_id": job_id},
     )
 
 
 @app.get("/status/{job_id}", tags=["Jobs"])
-async def get_job_status(job_id: str) -> JSONResponse:
-    """Return the current job status and per-agent progress."""
-    job = _get_job_or_404(job_id)
-
-    agents_payload = {
-        name: {
-            "name": agent.name,
-            "status": agent.status,
-            "message": agent.message,
-            "started_at": agent.started_at.isoformat() if agent.started_at else None,
-            "completed_at": agent.completed_at.isoformat() if agent.completed_at else None,
-        }
-        for name, agent in job.agents.items()
-    }
-
-    return JSONResponse(
-        {
-            "job_id": job.job_id,
-            "status": job.status.value,
-            "filename": job.filename,
-            "created_at": job.created_at.isoformat(),
-            "agents": agents_payload,
-            "error": job.error,
-        }
-    )
-
-
-@app.get("/result/{job_id}", tags=["Jobs"])
-async def get_job_result(job_id: str) -> JSONResponse:
-    """Return the final analysis result for a completed job."""
-    job = _get_job_or_404(job_id)
-
-    if job.status == JobStatus.FAILED:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Job failed: {job.error or 'Unknown error'}",
-        )
-
-    if job.status != JobStatus.COMPLETED:
-        raise HTTPException(
-            status_code=202,
-            detail=f"Job is still {job.status.value}. Poll /status/{job_id} for updates.",
-        )
-
-    if not job.result:
-        raise HTTPException(status_code=500, detail="Job completed but result is missing")
-
-    return JSONResponse(job.result.model_dump(mode="json"))
-
-
-@app.get("/stream/{job_id}", tags=["Jobs"])
 async def stream_job_updates(job_id: str) -> StreamingResponse:
     """Server-Sent Events stream that pushes live agent updates."""
     job = _get_job_or_404(job_id)
@@ -344,6 +288,31 @@ async def stream_job_updates(job_id: str) -> StreamingResponse:
             "Connection": "keep-alive",
         },
     )
+
+
+@app.get("/result/{job_id}", tags=["Jobs"])
+async def get_job_result(job_id: str) -> JSONResponse:
+    """Return the final analysis result for a completed job."""
+    job = _get_job_or_404(job_id)
+
+    if job.status == JobStatus.FAILED:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Job failed: {job.error or 'Unknown error'}",
+        )
+
+    if job.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=202,
+            detail=f"Job is still {job.status.value}. Poll /status/{job_id} for updates.",
+        )
+
+    if not job.result:
+        raise HTTPException(status_code=500, detail="Job completed but result is missing")
+
+    return JSONResponse(job.result.model_dump(mode="json"))
+
+
 
 
 # ── SSE helpers ───────────────────────────────────────────────────────────────
